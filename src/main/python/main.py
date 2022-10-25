@@ -193,7 +193,6 @@ class App(QMainWindow):
         side_layout.addWidget(self.progress_bar)
         
         viewport_layout = QVBoxLayout()
-        #label_viewport = QLabel()
         fig = MplCanvas(self)
 
         # Create toolbar, passing canvas as first parament, parent (self, the MainWindow) as second.
@@ -208,13 +207,12 @@ class App(QMainWindow):
         sidebar.setFixedWidth(250)
 
         # Set the window's main layout
-
         outer_layout = QHBoxLayout()
         outer_layout.addWidget(sidebar)
         outer_layout.addWidget(viewport)
 
         wid.setLayout(outer_layout)
-
+        # TO DO: CHNAGE TO RELATIVE PATH
         f = open(os.path.join('c:' + os.sep, 'Users','david','Documents','Python_Scripts','FinitePIV','src','build','settings','base.json'))
         data = json.load(f)
         app_name = data['app_name']
@@ -271,7 +269,6 @@ class App(QMainWindow):
         self.dialog_conf.setLayout(self.dialog_conf.dlg_layout)
         self.dialog_conf.exec()
             
-
     def dialog_conf_OK(self):
         'saves the values of the configuration into the project dictionary and the json file'
         global project_dictionary
@@ -294,17 +291,9 @@ class App(QMainWindow):
 
         self.dialog_conf.close()
 
-
-
-
-
-        
-
-
     def show_dialog_import(self):
         global project_dictionary
         
-
         if 'project_name' in project_dictionary.keys():
             self.dlg = QDialog(self)
             Title = 'Import images'
@@ -404,13 +393,7 @@ class App(QMainWindow):
         
         self.statusBar.showMessage(msg,2000)
 
-
-
-        
-        
-    
-
-
+###########################
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
