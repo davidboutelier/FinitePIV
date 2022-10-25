@@ -1,4 +1,6 @@
 import numpy as np
+import glob
+import shutil
 from time import sleep
 import json
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
@@ -26,11 +28,27 @@ class Worker(QObject):
 
     def import_img(self):
         global import_param
-        """Long-running task."""
-        for i in range(import_param[3]):
-            sleep(1)
-            self.progress.emit(i + 1)
-        self.finished.emit()
+        #import_param = [import_img_format, image_path, destination_folder, num_images]
+
+        im_format = import_param[0]
+        source_path = import_param[1]
+        dest_path = import_param[2]
+        num_im = import_param[3]
+
+        if im_format == 'TIF':
+            file_list = glob.glob(os.path.join(source_path, '*.tif'))
+            
+            for i in range(num_im):
+                file = file_list[i]
+                shutil.copy(os.path.join(source_path, file), os.path.join(dest_path, file))
+                self.progress.emit(i + 1)
+            self.finished.emit()
+        elif im_format == 'DNG':
+            print('not implemented yet')
+        else:
+            print('error image format unknown')
+
+        
     
 
 
@@ -88,6 +106,10 @@ class App(QMainWindow):
         menubar = self.menuBar()
         menubar.setNativeMenuBar(True)
 
+        mod_conf_action = QAction('\u2630',self)
+        mod_conf_action.triggered.connect(self.show_config)
+        menubar.addAction(mod_conf_action)
+
         filemenu_project = menubar.addMenu('Project')
         filemenu_project.addAction(new_project_action)
         filemenu_project.addAction(open_project_action)
@@ -96,7 +118,6 @@ class App(QMainWindow):
 
         filemenu_data = menubar.addMenu('Data')
         filemenu_data.addAction(import_img_action)
-
 
         filemenu_calibrate = menubar.addMenu('Calibrate')
         define_calib_board_action = QAction("Define calibration board",self)
@@ -204,6 +225,7 @@ class App(QMainWindow):
         self.show()
 
     def create_project(self):
+
         global project_dictionary
 
         project_path=QFileDialog.getExistingDirectory(self,"Choose Directory")
@@ -218,8 +240,70 @@ class App(QMainWindow):
         # update the title of the main window
         self.setWindowTitle(project_name) 
 
+    def show_config(self):
+        global project_dictionary
+
+        self.dialog_conf = QDialog(self)
+        Title = 'Configuration'
+        self.dialog_conf.setWindowTitle(Title)
+        self.dialog_conf.dlg_layout = QFormLayout()
+        self.dialog_conf.username = QLineEdit()
+        self.dialog_conf.max_cores = QSpinBox()
+
+        if os.path.exists('conf.json'):
+            with open('conf.json', 'r') as f:
+                conf = json.load(f)
+            self.dialog_conf.username.setText(conf['username'])
+            self.dialog_conf.max_cores.setValue(conf['use_cores'])
+        else:
+            self.dialog_conf.username.setText(os.getlogin())
+            max = os.cpu_count()
+            self.dialog_conf.max_cores.setMaximum = max
+            self.dialog_conf.max_cores.setMinimum = 1
+            self.dialog_conf.max_cores.setValue(max)
+        
+        self.dialog_conf.dlg_layout.addRow('username:', self.dialog_conf.username)
+        self.dialog_conf.dlg_layout.addRow('use cores:', self.dialog_conf.max_cores)
+        
+        self.dialog_conf.OK_button = QPushButton('Apply')
+        self.dialog_conf.OK_button.clicked.connect(self.dialog_conf_OK)
+        self.dialog_conf.dlg_layout.addRow(' ', self.dialog_conf.OK_button)
+        self.dialog_conf.setLayout(self.dialog_conf.dlg_layout)
+        self.dialog_conf.exec()
+            
+
+    def dialog_conf_OK(self):
+        'saves the values of the configuration into the project dictionary and the json file'
+        global project_dictionary
+        project_dictionary['username'] = self.dialog_conf.username.text()
+        project_dictionary['use_cores'] = self.dialog_conf.max_cores.value()
+
+        if os.path.exists('conf.json'):
+            print('file exists')
+            with open('conf.json', 'r') as f:
+                conf = json.load(f)
+            conf['username'] = project_dictionary['username'] 
+            conf['use_cores'] = project_dictionary['use_cores']
+            with open('conf.json', 'w') as f:
+                f.write(json.dumps(conf))
+
+        else:
+            conf = {'username': project_dictionary['username'], 'use_cores': project_dictionary['use_cores']}
+            with open('conf.json', 'w') as f:
+                f.write(json.dumps(conf))
+
+        self.dialog_conf.close()
+
+
+
+
+
+        
+
+
     def show_dialog_import(self):
         global project_dictionary
+        
 
         if 'project_name' in project_dictionary.keys():
             self.dlg = QDialog(self)
@@ -283,6 +367,7 @@ class App(QMainWindow):
         list_images = os.listdir(image_path)
         num_images = len(list_images)
         new_dataset['number images'] = num_images
+        new_dataset['dt'] = import_img_dt
 
         # add dataset to dictionary and export as json
         project_dictionary[new_dataset_name] = new_dataset
@@ -299,14 +384,14 @@ class App(QMainWindow):
         # place parameters in global list for the worker
         import_param = [import_img_format, image_path, destination_folder, num_images]
         self.import_thread = QThread()
-        self.worker = Worker()
-        self.worker.moveToThread(self.import_thread)
-        self.import_thread.started.connect(self.worker.import_img)
-        self.worker.progress.connect(self.update_progress_bar)
-        self.worker.finished.connect(self.import_thread.quit)
+        self.import_worker = Worker()
+        self.import_worker.moveToThread(self.import_thread)
+        self.import_thread.started.connect(self.import_worker.import_img)
+        self.import_worker.progress.connect(self.update_import_progress_bar)
+        self.import_worker.finished.connect(self.import_thread.quit)
         self.import_thread.start()
 
-    def update_progress_bar(self, current_val):
+    def update_import_progress_bar(self, current_val):
         global import_param
         num_images = import_param[3]
         self.progress_bar.setValue(int(100 * current_val/num_images))
