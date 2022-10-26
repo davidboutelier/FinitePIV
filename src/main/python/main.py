@@ -25,7 +25,6 @@ class Worker(QObject):
     progress = pyqtSignal(int)
 
 
-
     def import_img(self):
         from util_fn import dng2tif
         global import_param
