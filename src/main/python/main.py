@@ -27,24 +27,37 @@ class Worker(QObject):
 
 
     def import_img(self):
+        from util_fn import dng2tif
         global import_param
         #import_param = [import_img_format, image_path, destination_folder, num_images]
 
         im_format = import_param[0]
         source_path = import_param[1]
         dest_path = import_param[2]
-        num_im = import_param[3]
 
         if im_format == 'TIF':
-            file_list = glob.glob(os.path.join(source_path, '*.tif'))
+            file_list = sorted(glob.glob(os.path.join(source_path, '*.tif')))
+            n_img = len(file_list)
+            import_param[3] = n_img
             
-            for i in range(num_im):
-                file = file_list[i]
-                shutil.copy(os.path.join(source_path, file), os.path.join(dest_path, file))
+            for i in range(n_img):
+                file_in = file_list[i]
+                file_out = 'IMG_'+str(i).zfill(4)+'.tif'
+                shutil.copy(os.path.join(source_path, file_in), os.path.join(dest_path, file_out))
                 self.progress.emit(i + 1)
             self.finished.emit()
         elif im_format == 'DNG':
+            file_list = sorted(glob.glob(os.path.join(source_path, '*.dng')))
+            n_img = len(file_list)
             print('not implemented yet')
+            for i in range(n_img):
+                file_in = file_list[i]
+                file_out = 'IMG_'+str(i).zfill(4)+'.tif'
+                #dng2tif(os.path.join(source_path, file_in), os.path.join(dest_path, file_out))
+                sleep(2)
+                self.progress.emit(i + 1)
+            self.finished.emit()
+
         else:
             print('error image format unknown')
 
@@ -162,7 +175,6 @@ class App(QMainWindow):
 
         bitmap_layout.addWidget(self.checkbox_bitmap)
         bitmap_layout.addWidget(self.button_bitmap)
-
         side_layout.addLayout(bitmap_layout)
 
         # scalar checkbox and button
