@@ -16,6 +16,12 @@ from matplotlib.figure import Figure
 import os
 import sys
 
+
+import rawpy
+import numpy as np
+import warnings
+from skimage import io, img_as_uint
+
 # global variable
 project_dictionary = {} # empty dictionary
 import_param = []
@@ -24,6 +30,25 @@ class Worker(QObject):
     finished = pyqtSignal()
     progress = pyqtSignal(int)
 
+    def rgb2gray(self,rgb):
+    
+        return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
+
+    def dng2tif(self, file_in):
+        with rawpy.imread(file_in) as raw:
+            rgb = raw.postprocess()
+            # convert to gray
+            gray_img = self.rgb2gray(rgb)
+
+            # stretch
+            gray_img_max = np.max(gray_img.flatten())
+            gray_img_min = np.min(gray_img.flatten())
+            gray_img = (gray_img - gray_img_min) / (gray_img_max - gray_img_min)
+
+            # convert to 16 bit
+            warnings.filterwarnings("ignore", category=UserWarning)
+            bit_16_gray_img = img_as_uint(gray_img)
+        return bit_16_gray_img
 
     def import_img(self):
         from util_fn import dng2tif
@@ -51,9 +76,9 @@ class Worker(QObject):
             print('not implemented yet')
             for i in range(n_img):
                 file_in = file_list[i]
-                file_out = 'IMG_'+str(i).zfill(4)+'.tif'
-                #dng2tif(os.path.join(source_path, file_in), os.path.join(dest_path, file_out))
-                sleep(2)
+                file_out = os.path.join(dest_path, 'IMG_'+str(i).zfill(4)+'.tif')
+                new_img = self.dng2tif(os.path.join(source_path, file_in))
+                io.imsave(file_out, new_img)
                 self.progress.emit(i + 1)
             self.finished.emit()
 
