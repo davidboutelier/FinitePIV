@@ -30,15 +30,11 @@ class Worker(QObject):
     finished = pyqtSignal()
     progress = pyqtSignal(int)
 
-    def rgb2gray(self,rgb):
-    
-        return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
-
     def dng2tif(self, file_in):
         with rawpy.imread(file_in) as raw:
             rgb = raw.postprocess()
             # convert to gray
-            gray_img = self.rgb2gray(rgb)
+            gray_img = np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
 
             # stretch
             gray_img_max = np.max(gray_img.flatten())
