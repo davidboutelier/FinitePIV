@@ -47,7 +47,6 @@ class Worker(QObject):
         return bit_16_gray_img
 
     def import_img(self):
-        from util_fn import dng2tif
         global import_param
         #import_param = [import_img_format, image_path, destination_folder, num_images]
 
@@ -73,7 +72,10 @@ class Worker(QObject):
             for i in range(n_img):
                 file_in = file_list[i]
                 file_out = os.path.join(dest_path, 'IMG_'+str(i).zfill(4)+'.tif')
+                # convert dng to 16 bit tif
                 new_img = self.dng2tif(os.path.join(source_path, file_in))
+
+                # save new image in destination folder as tif
                 io.imsave(file_out, new_img)
                 self.progress.emit(i + 1)
             self.finished.emit()
