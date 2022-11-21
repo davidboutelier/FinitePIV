@@ -48,8 +48,7 @@ class Worker(QObject):
 
     def import_img(self):
         global import_param
-        #import_param = [import_img_format, image_path, destination_folder, num_images]
-
+        
         im_format = import_param[0]
         source_path = import_param[1]
         dest_path = import_param[2]
@@ -84,8 +83,6 @@ class Worker(QObject):
             print('error image format unknown')
 
         
-    
-
 
 class MplCanvas(FigureCanvasQTAgg):
 
