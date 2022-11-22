@@ -2,6 +2,7 @@ import numpy as np
 import glob
 import shutil
 from time import sleep
+from datetime import datetime
 import json
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from PyQt5.QtWidgets import QApplication, QDoubleSpinBox, QStatusBar, QMainWindow, QMessageBox, QFormLayout, QAction, qApp, QVBoxLayout,QHBoxLayout,QCheckBox, QWidget,QLabel,QPushButton,QGroupBox, QComboBox, QSpinBox,QLineEdit,QProgressBar,QFileDialog,QDialog
@@ -25,8 +26,10 @@ from skimage import io, img_as_uint
 # global variable
 project_dictionary = {} # empty dictionary
 import_param = [] # empty list for import
-display_settings = {'background_colormap_index': 0, 'flip_background': False, 'background_min': 0, 'background_max': 65535,
+display_settings = {'background_colormap_index': 0, 'flip_background': False, 'background_min': 0, 'background_max': 65535, 
+'scalae_colormap_index': 0, 'flip_scalar' : False, 'scalar_obj_index': 0,
 'vector_type': 'inc', 'sum_mode': 'eul', 'vector_color_index': 0, 'vector_thickness': 1, 'vector_sampling': 1, 'vector_scaling_mode_index':0, 'vector_scale': 1}
+starttime = None
 
 class Worker(QObject):
     finished = pyqtSignal()
@@ -49,7 +52,9 @@ class Worker(QObject):
         return bit_16_gray_img
 
     def import_img(self):
-        global import_param
+        global import_param, starttime
+
+        starttime = datetime.now()
         
         im_format = import_param[0]
         source_path = import_param[1]
@@ -66,6 +71,7 @@ class Worker(QObject):
                 shutil.copy(os.path.join(source_path, file_in), os.path.join(dest_path, file_out))
                 self.progress.emit(i + 1)
             self.finished.emit()
+            endtime = datetime.now()
         
         elif im_format == 'DNG':
             file_list = sorted(glob.glob(os.path.join(source_path, '*.dng')))
@@ -84,7 +90,7 @@ class Worker(QObject):
 
         else:
             print('error image format unknown')
-
+        
         
 
 class MplCanvas(FigureCanvasQTAgg):
@@ -204,6 +210,7 @@ class App(QMainWindow):
         
         button_scalar = QPushButton(">")
         button_scalar.setFixedWidth(50)
+        button_scalar.clicked.connect(self.show_dialog_scalar_display)
 
         scalar_layout.addWidget(checkbox_scalar)
         scalar_layout.addWidget(button_scalar)
@@ -246,12 +253,8 @@ class App(QMainWindow):
         outer_layout.addWidget(viewport)
 
         wid.setLayout(outer_layout)
-        # TO DO: CHNAGE TO RELATIVE PATH
-        f = open(os.path.join('c:' + os.sep, 'Users','david','Documents','Python_Scripts','FinitePIV','src','build','settings','base.json'))
-        data = json.load(f)
-        app_name = data['app_name']
-        app_version = data['version']
-        self.setWindowTitle(app_name + ': '+app_version)
+        
+        self.setWindowTitle('FinitePIV')
         self.setGeometry(0, 0, 1200, 800)
         self.showMaximized()
         self.show()
@@ -411,8 +414,17 @@ class App(QMainWindow):
         self.import_worker.moveToThread(self.import_thread)
         self.import_thread.started.connect(self.import_worker.import_img)
         self.import_worker.progress.connect(self.update_import_progress_bar)
-        self.import_worker.finished.connect(self.import_thread.quit)
+        self.import_worker.finished.connect(self.import_finished)
         self.import_thread.start()
+
+    def import_finished(self):
+        global starttime
+
+        self.import_thread.quit
+        endtime = datetime.now()
+        duration = endtime-starttime
+        msg = 'images imported  in '+ str(duration)
+        self.statusBar.showMessage(msg,3000)
 
     def update_import_progress_bar(self, current_val):
         global import_param
@@ -458,9 +470,7 @@ class App(QMainWindow):
 
     def show_dialog_vector_display(self):
         global project_dictionary, display_settings
-
         self.dialog_vector = QDialog(self)
-        
 
         if display_settings['vector_type'] == 'inc':    # this condition allows creating another window if the data is cumulative
             Title = 'Vectors'
@@ -511,6 +521,63 @@ class App(QMainWindow):
 
     def save_vector_display_settings(self):
         global display_settings
+
+    def show_dialog_scalar_display(self):
+        global project_dictionary, display_settings
+        self.dialog_scalar = QDialog(self)
+
+        if display_settings['vector_type'] == 'inc':
+            Title = 'Scalar'
+            self.dialog_scalar.setWindowTitle(Title)
+            self.dialog_scalar.dlg_layout = QFormLayout()
+            self.dialog_scalar_obj_combo = QComboBox()
+            self.dialog_scalar_obj_combo.addItem('u')
+            self.dialog_scalar_obj_combo.addItem('v')
+            self.dialog_scalar_obj_combo.addItem('(u^2+v^2)^0.5')
+            self.dialog_scalar_obj_combo.addItem('atan(u,v)')
+            self.dialog_scalar_obj_combo.addItem('du/dx')
+            self.dialog_scalar_obj_combo.addItem('du/dy')
+            self.dialog_scalar_obj_combo.addItem('dv/dx')
+            self.dialog_scalar_obj_combo.addItem('dv/dy')
+            self.dialog_scalar_obj_combo.addItem('du/dx + dv/dy')
+            self.dialog_scalar_obj_combo.addItem('dv/dx - du/dy')
+            self.dialog_scalar.dlg_layout.addRow('scalar object: ', self.dialog_scalar_obj_combo)
+
+            self.dialog_scalar_colormap_combobox = QComboBox()
+            list_colors = [
+            'viridis', 'plasma', 'inferno', 'magma', 'cividis',
+            'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
+            'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+            'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn',
+            'binary', 'gist_yarg', 'gist_gray', 'gray', 'bone', 'pink',
+            'spring', 'summer', 'autumn', 'winter', 'cool', 'Wistia',
+            'hot', 'afmhot', 'gist_heat', 'copper',
+            'PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu',
+            'RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic', 'twilight', 'twilight_shifted', 'hsv',
+            'Pastel1', 'Pastel2', 'Paired', 'Accent',
+            'Dark2', 'Set1', 'Set2', 'Set3',
+            'tab10', 'tab20', 'tab20b', 'tab20c',
+            'flag', 'prism', 'ocean', 'gist_earth', 'terrain', 'gist_stern',
+            'gnuplot', 'gnuplot2', 'CMRmap', 'cubehelix', 'brg',
+            'gist_rainbow', 'rainbow', 'jet', 'turbo', 'nipy_spectral',
+            'gist_ncar']
+            for i in range(len(list_colors)):
+                self.dialog_scalar_colormap_combobox.addItem(list_colors[i])
+
+            self.dialog_scalar.dlg_layout.addRow('colormap: ', self.dialog_scalar_colormap_combobox)
+            self.dialog_scalar.flip_colormap_checkbox = QCheckBox('flip colormap')
+            self.dialog_scalar.flip_colormap_checkbox.setChecked(display_settings['flip_scalar'])
+            self.dialog_scalar.dlg_layout.addRow(self.dialog_scalar.flip_colormap_checkbox)
+            self.dialog_scalar.scaling_mode = QComboBox()
+            self.dialog_scalar.scaling_mode.addItem('min-max')
+            self.dialog_scalar.scaling_mode.addItem('mean + 3 sigma')
+            self.dialog_scalar.scaling_mode.addItem('mean + 2 sigma')
+            self.dialog_scalar.scaling_mode.addItem('mean + 1 sigma')
+            self.dialog_scalar.scaling_mode.addItem('manual')
+            self.dialog_scalar.dlg_layout.addRow('scalar scaling: ', self.dialog_scalar.scaling_mode)
+
+        self.dialog_scalar.setLayout(self.dialog_scalar.dlg_layout)
+        self.dialog_scalar.exec()
 
 ###########################
 
