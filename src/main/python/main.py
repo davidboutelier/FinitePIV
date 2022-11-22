@@ -4,7 +4,7 @@ import shutil
 from time import sleep
 import json
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
-from PyQt5.QtWidgets import QApplication, QStatusBar, QMainWindow, QMessageBox, QFormLayout, QAction, qApp, QVBoxLayout,QHBoxLayout,QCheckBox, QWidget,QLabel,QPushButton,QGroupBox, QComboBox, QSpinBox,QLineEdit,QProgressBar,QFileDialog,QDialog
+from PyQt5.QtWidgets import QApplication, QDoubleSpinBox, QStatusBar, QMainWindow, QMessageBox, QFormLayout, QAction, qApp, QVBoxLayout,QHBoxLayout,QCheckBox, QWidget,QLabel,QPushButton,QGroupBox, QComboBox, QSpinBox,QLineEdit,QProgressBar,QFileDialog,QDialog
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 import matplotlib
 matplotlib.use('Qt5Agg')
@@ -24,7 +24,9 @@ from skimage import io, img_as_uint
 
 # global variable
 project_dictionary = {} # empty dictionary
-import_param = []
+import_param = [] # empty list for import
+display_settings = {'background_colormap_index': 0, 'flip_background': False, 'background_min': 0, 'background_max': 65535,
+'vector_type': 'inc', 'sum_mode': 'eul', 'vector_color_index': 0, 'vector_thickness': 1, 'vector_sampling': 1, 'vector_scaling_mode_index':0, 'vector_scale': 1}
 
 class Worker(QObject):
     finished = pyqtSignal()
@@ -64,6 +66,7 @@ class Worker(QObject):
                 shutil.copy(os.path.join(source_path, file_in), os.path.join(dest_path, file_out))
                 self.progress.emit(i + 1)
             self.finished.emit()
+        
         elif im_format == 'DNG':
             file_list = sorted(glob.glob(os.path.join(source_path, '*.dng')))
             n_img = len(file_list)
@@ -102,8 +105,6 @@ class App(QMainWindow):
 
         wid = QWidget(self)
         self.setCentralWidget(wid)
-
-        
 
         # create the menus
         # from Project
@@ -191,6 +192,7 @@ class App(QMainWindow):
         
         self.button_bitmap = QPushButton(">")
         self.button_bitmap.setFixedWidth(50)
+        self.button_bitmap.clicked.connect(self.show_dialog_background_display)
 
         bitmap_layout.addWidget(self.checkbox_bitmap)
         bitmap_layout.addWidget(self.button_bitmap)
@@ -214,11 +216,12 @@ class App(QMainWindow):
         
         button_vector = QPushButton(">")
         button_vector.setFixedWidth(50)
+        button_vector.clicked.connect(self.show_dialog_vector_display)
 
         vector_layout.addWidget(checkbox_vector)
         vector_layout.addWidget(button_vector)
-
         side_layout.addLayout(vector_layout)
+
         side_layout.addStretch()
         self.progress_bar = QProgressBar()
         side_layout.addWidget(self.progress_bar)
@@ -423,6 +426,91 @@ class App(QMainWindow):
             msg = 'importing images' 
         
         self.statusBar.showMessage(msg,2000)
+
+    def show_dialog_background_display(self):
+        global project_dictionary, display_settings
+
+        self.dialog_background = QDialog(self)
+        Title = 'Background'
+        self.dialog_background.setWindowTitle(Title)
+        self.dialog_background.dlg_layout = QFormLayout()
+        self.dialog_background.colormap_combo = QComboBox()
+        self.dialog_background.colormap_combo.addItem('Greys')
+        self.dialog_background.colormap_combo.addItem('viridis')
+        self.dialog_background.colormap_combo.setCurrentIndex(display_settings['background_colormap_index'])
+
+        self.dialog_background.dlg_layout.addRow('colormap: ', self.dialog_background.colormap_combo)
+        self.dialog_background.flip_colormap_checkbox = QCheckBox('flip colormap')
+        self.dialog_background.flip_colormap_checkbox.setChecked(display_settings['flip_background'])
+        self.dialog_background.dlg_layout.addRow(self.dialog_background.flip_colormap_checkbox)
+        self.dialog_background.min_value = QLineEdit()
+        self.dialog_background.min_value.setText(str(display_settings['background_min']))
+        self.dialog_background.max_value = QLineEdit()
+        self.dialog_background.max_value.setText(str(display_settings['background_max']))
+        self.dialog_background.dlg_layout.addRow('min value: ',self.dialog_background.min_value)
+        self.dialog_background.dlg_layout.addRow('max value: ',self.dialog_background.max_value)
+
+        self.dialog_background.dlg_button=QPushButton('OK')
+        #self.dialog_background.dlg_button.clicked.connect(self.get_import_parameters)
+        self.dialog_background.dlg_layout.addRow(self.dialog_background.dlg_button)
+        self.dialog_background.setLayout(self.dialog_background.dlg_layout)
+        self.dialog_background.exec()
+
+    def show_dialog_vector_display(self):
+        global project_dictionary, display_settings
+
+        self.dialog_vector = QDialog(self)
+        
+
+        if display_settings['vector_type'] == 'inc':    # this condition allows creating another window if the data is cumulative
+            Title = 'Vectors'
+            self.dialog_vector.setWindowTitle(Title)
+            self.dialog_vector.dlg_layout = QFormLayout()
+            self.dialog_vector.color_combo = QComboBox()
+            self.dialog_vector.color_combo.addItem('white')
+            self.dialog_vector.color_combo.addItem('black')
+            self.dialog_vector.color_combo.addItem('red')
+            self.dialog_vector.color_combo.addItem('blue')
+            self.dialog_vector.color_combo.addItem('green')
+            self.dialog_vector.color_combo.addItem('yellow')
+            self.dialog_vector.color_combo.addItem('magenta')
+            self.dialog_vector.color_combo.addItem('cyan')
+            self.dialog_vector.color_combo.setCurrentIndex(display_settings['vector_color_index'])
+            self.dialog_vector.dlg_layout.addRow('color: ', self.dialog_vector.color_combo)
+
+            self.dialog_vector.thickness_spinbox = QDoubleSpinBox()
+            self.dialog_vector.thickness_spinbox.setRange(0.1,2)
+            self.dialog_vector.thickness_spinbox.setSingleStep(0.1)
+            self.dialog_vector.thickness_spinbox.setValue(display_settings['vector_thickness'])
+            self.dialog_vector.dlg_layout.addRow('thickness: ', self.dialog_vector.thickness_spinbox)
+
+            self.dialog_vector.sampling_spinbox = QSpinBox()
+            self.dialog_vector.sampling_spinbox.setMinimum(1)
+            self.dialog_vector.sampling_spinbox.setMaximum(10)
+            self.dialog_vector.sampling_spinbox.setValue(display_settings['vector_sampling'])
+            self.dialog_vector.dlg_layout.addRow('sampling: ', self.dialog_vector.sampling_spinbox)
+
+            self.dialog_vector.scaling_mode_combobox = QComboBox()
+            self.dialog_vector.scaling_mode_combobox.addItem('max')
+            self.dialog_vector.scaling_mode_combobox.addItem('mean')
+            self.dialog_vector.scaling_mode_combobox.addItem('median')
+            self.dialog_vector.scaling_mode_combobox.addItem('manual')
+            self.dialog_vector.scaling_mode_combobox.setCurrentIndex(display_settings['vector_scaling_mode_index'])
+            self.dialog_vector.dlg_layout.addRow('scaling mode: ', self.dialog_vector.scaling_mode_combobox)
+
+            self.dialog_vector_scale_edit = QLineEdit()
+            self.dialog_vector_scale_edit.setText(str(display_settings['vector_scale']))
+            self.dialog_vector.dlg_layout.addRow('scale: ', self.dialog_vector_scale_edit)
+
+            self.dialog_vector.dlg_button=QPushButton('OK')
+            #self.dialog_background.dlg_button.clicked.connect(self.get_import_parameters)
+            self.dialog_vector.dlg_layout.addRow(self.dialog_vector.dlg_button)
+
+            self.dialog_vector.setLayout(self.dialog_vector.dlg_layout)
+        self.dialog_vector.exec()
+
+    def save_vector_display_settings(self):
+        global display_settings
 
 ###########################
 
