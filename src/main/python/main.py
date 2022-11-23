@@ -8,11 +8,13 @@ from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from PyQt5.QtWidgets import QApplication, QDoubleSpinBox, QStatusBar, QMainWindow, QMessageBox, QFormLayout, QAction, qApp, QVBoxLayout,QHBoxLayout,QCheckBox, QWidget,QLabel,QPushButton,QGroupBox, QComboBox, QSpinBox,QLineEdit,QProgressBar,QFileDialog,QDialog
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 import matplotlib
+import matplotlib.pyplot as plt
 matplotlib.use('Qt5Agg')
+from skimage import img_as_float
 
 #from PyQt5 import QtCore, QtWidgets
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import os
 import sys
@@ -26,10 +28,13 @@ from skimage import io, img_as_uint
 # global variable
 project_dictionary = {} # empty dictionary
 import_param = [] # empty list for import
-display_settings = {'background_colormap_index': 0, 'flip_background': False, 'background_min': 0, 'background_max': 65535, 
-'scalae_colormap_index': 0, 'flip_scalar' : False, 'scalar_obj_index': 0,
+display_settings = {'dataset_index':0, 'frame_number':1, 
+'display_background': False, 'display_scalar': False, 'display_vector': False,
+'background_colormap_index': 0, 'flip_background': False, 'background_min': 0, 'background_max': 1, 
+'scalar_colormap_index': 0, 'flip_scalar' : False, 'scalar_obj_index': 0,
 'vector_type': 'inc', 'sum_mode': 'eul', 'vector_color_index': 0, 'vector_thickness': 1, 'vector_sampling': 1, 'vector_scaling_mode_index':0, 'vector_scale': 1}
 starttime = None
+list_cmap_background = ['gray', 'gist_gray', 'bone', 'copper']
 
 class Worker(QObject):
     finished = pyqtSignal()
@@ -67,7 +72,7 @@ class Worker(QObject):
             
             for i in range(n_img):
                 file_in = file_list[i]
-                file_out = 'IMG_'+str(i).zfill(4)+'.tif'
+                file_out = 'IMG_'+str(i+1).zfill(4)+'.tif'
                 shutil.copy(os.path.join(source_path, file_in), os.path.join(dest_path, file_out))
                 self.progress.emit(i + 1)
             self.finished.emit()
@@ -79,7 +84,7 @@ class Worker(QObject):
             print('not implemented yet')
             for i in range(n_img):
                 file_in = file_list[i]
-                file_out = os.path.join(dest_path, 'IMG_'+str(i).zfill(4)+'.tif')
+                file_out = os.path.join(dest_path, 'IMG_'+str(i+1).zfill(4)+'.tif')
                 # convert dng to 16 bit tif
                 new_img = self.dng2tif(os.path.join(source_path, file_in))
 
@@ -93,12 +98,12 @@ class Worker(QObject):
         
         
 
-class MplCanvas(FigureCanvasQTAgg):
+class MplCanvas(FigureCanvas):
 
     def __init__(self, parent=None, width=5, height=4, dpi=100):
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
-        super(MplCanvas, self).__init__(fig)
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111)
+        super(MplCanvas, self).__init__(self.fig) 
 
 
 class App(QMainWindow):
@@ -233,15 +238,13 @@ class App(QMainWindow):
         self.progress_bar = QProgressBar()
         side_layout.addWidget(self.progress_bar)
         
-        viewport_layout = QVBoxLayout()
-        fig = MplCanvas(self)
-
-        # Create toolbar, passing canvas as first parament, parent (self, the MainWindow) as second.
-        toolbar = NavigationToolbar(fig, self)
-        viewport_layout.addWidget(fig)
-        viewport_layout.addWidget(toolbar)
+        self.viewport_layout = QVBoxLayout()
+        self.canvas = MplCanvas(self)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        self.viewport_layout.addWidget(self.canvas)
+        self.viewport_layout.addWidget(self.toolbar)
         viewport = QGroupBox("Viewport")
-        viewport.setLayout(viewport_layout)
+        viewport.setLayout(self.viewport_layout)
 
         sidebar = QGroupBox("Controls")
         sidebar.setLayout(side_layout)
@@ -364,7 +367,7 @@ class App(QMainWindow):
             msg.exec_()
 
     def get_import_parameters(self):
-        global project_dictionary, import_param
+        global project_dictionary, import_param, display_settings
         
         import_dataset = self.dlg.dataset_combo.currentText()
         import_img_format = self.dlg.image_format_combo.currentText()
@@ -378,11 +381,14 @@ class App(QMainWindow):
             i = i+1
             new_dataset_name = 'dataset_'+str(i)
         
+        display_settings['dataset_index'] = i
+        
         # update the main window controls
         self.dataset_combobox.addItem(import_dataset)
         self.frame_num.setValue(1)
         self.time_num.setText(str(0))
         self.checkbox_bitmap.setChecked(True)
+        display_settings['display_background'] = True
         self.dlg.close()
 
         # get path to images
@@ -395,17 +401,21 @@ class App(QMainWindow):
         new_dataset['number images'] = num_images
         new_dataset['dt'] = import_img_dt
 
-        # add dataset to dictionary and export as json
-        project_dictionary[new_dataset_name] = new_dataset
-        with open("current_project.json", "w") as fp:
-            json.dump(project_dictionary , fp)
-
         # create destination folder
         destination_folder = os.path.join(project_dictionary['project_path'], project_dictionary['project_name'], new_dataset['name'])
         msg = 'creating folder: '+destination_folder
         self.statusBar.showMessage(msg,3000)
         os.mkdir(destination_folder)
 
+        new_dataset['folder'] = destination_folder
+        new_dataset['is_scaled'] = False
+
+        # add dataset to dictionary and export as json
+        project_dictionary[new_dataset_name] = new_dataset
+        with open("current_project.json", "w") as fp:
+            json.dump(project_dictionary , fp)
+
+        
         # start the import in a new worker
         # place parameters in global list for the worker
         import_param = [import_img_format, image_path, destination_folder, num_images]
@@ -425,6 +435,8 @@ class App(QMainWindow):
         duration = endtime-starttime
         msg = 'images imported  in '+ str(duration)
         self.statusBar.showMessage(msg,3000)
+
+        self.update_mpl()
 
     def update_import_progress_bar(self, current_val):
         global import_param
@@ -447,8 +459,10 @@ class App(QMainWindow):
         self.dialog_background.setWindowTitle(Title)
         self.dialog_background.dlg_layout = QFormLayout()
         self.dialog_background.colormap_combo = QComboBox()
-        self.dialog_background.colormap_combo.addItem('Greys')
-        self.dialog_background.colormap_combo.addItem('viridis')
+
+        for color in list_cmap_background:
+            self.dialog_background.colormap_combo.addItem(color)
+
         self.dialog_background.colormap_combo.setCurrentIndex(display_settings['background_colormap_index'])
 
         self.dialog_background.dlg_layout.addRow('colormap: ', self.dialog_background.colormap_combo)
@@ -578,6 +592,56 @@ class App(QMainWindow):
 
         self.dialog_scalar.setLayout(self.dialog_scalar.dlg_layout)
         self.dialog_scalar.exec()
+
+    def update_mpl(self):
+        global display_settings, project_dictionary
+        self.clear_mpl()
+
+        fig = self.create_fig()
+        self.canvas = FigureCanvas(fig)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        self.viewport_layout.addWidget(self.canvas)
+        self.viewport_layout.addWidget(self.toolbar)
+
+
+    def clear_mpl(self):
+        self.viewport_layout.removeWidget(self.canvas)
+        self.viewport_layout.removeWidget(self.toolbar)
+        self.canvas.close()
+        self.toolbar.close()
+
+    def create_fig(self):
+        global display_settings, project_dictionary
+
+        dataset_index = display_settings['dataset_index']
+        dataset = 'dataset_'+str(dataset_index)
+        dataset_info = project_dictionary[dataset]
+        display_background = display_settings['display_background']
+
+        fig = Figure(figsize=(5, 4), dpi=100)
+
+        if display_background:
+            folder = dataset_info['folder']
+            max_frame = dataset_info["number images"]
+            current_frame = display_settings['frame_number']
+
+            back_colormap_index = display_settings['background_colormap_index']
+            back_colormap_name = list_cmap_background[back_colormap_index]
+            min_color = display_settings['background_min']
+            max_color = display_settings['background_max']
+
+            if (current_frame > 0) & (current_frame <= max_frame):
+                img = img_as_float(io.imread(os.path.join(folder, 'IMG_'+str(current_frame).zfill(4)+'.tif')))
+                img = (img - np.min(img)) / (np.max(img) - np.min(img))
+
+                ax = fig.add_subplot(111)
+                im = ax.imshow(img, cmap=back_colormap_name, clim =(min_color, max_color))
+                ax.set_aspect('equal')
+                fig.colorbar(im, ax=ax)
+        
+        fig.tight_layout() 
+        return fig       
+
 
 ###########################
 
