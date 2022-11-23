@@ -438,6 +438,7 @@ class App(QMainWindow):
 
         self.update_mpl()
 
+
     def update_import_progress_bar(self, current_val):
         global import_param
         num_images = import_param[3]
@@ -464,7 +465,6 @@ class App(QMainWindow):
             self.dialog_background.colormap_combo.addItem(color)
 
         self.dialog_background.colormap_combo.setCurrentIndex(display_settings['background_colormap_index'])
-
         self.dialog_background.dlg_layout.addRow('colormap: ', self.dialog_background.colormap_combo)
         self.dialog_background.flip_colormap_checkbox = QCheckBox('flip colormap')
         self.dialog_background.flip_colormap_checkbox.setChecked(display_settings['flip_background'])
@@ -477,7 +477,7 @@ class App(QMainWindow):
         self.dialog_background.dlg_layout.addRow('max value: ',self.dialog_background.max_value)
 
         self.dialog_background.dlg_button=QPushButton('OK')
-        #self.dialog_background.dlg_button.clicked.connect(self.get_import_parameters)
+        self.dialog_background.dlg_button.clicked.connect(self.update_dialog_background)
         self.dialog_background.dlg_layout.addRow(self.dialog_background.dlg_button)
         self.dialog_background.setLayout(self.dialog_background.dlg_layout)
         self.dialog_background.exec()
@@ -626,7 +626,11 @@ class App(QMainWindow):
             current_frame = display_settings['frame_number']
 
             back_colormap_index = display_settings['background_colormap_index']
-            back_colormap_name = list_cmap_background[back_colormap_index]
+            flip_colormap = display_settings['flip_background']
+            if flip_colormap:
+                back_colormap_name = list_cmap_background[back_colormap_index]+'_r'
+            else:
+                back_colormap_name = list_cmap_background[back_colormap_index]
             min_color = display_settings['background_min']
             max_color = display_settings['background_max']
 
@@ -641,6 +645,25 @@ class App(QMainWindow):
         
         fig.tight_layout() 
         return fig       
+
+    def update_dialog_background(self):
+        global display_settings
+        back_colormap_index = self.dialog_background.colormap_combo.currentIndex()
+        color_min = float(self.dialog_background.min_value.text())
+        color_max = float(self.dialog_background.max_value.text())
+        flip_background = self.dialog_background.flip_colormap_checkbox.isChecked()
+
+        display_settings['background_colormap_index'] = back_colormap_index
+        display_settings['background_min'] = color_min
+        display_settings['background_max'] = color_max
+        display_settings['flip_background'] = flip_background 
+
+        self.update_mpl()
+
+        self.dialog_background.close()
+
+
+
 
 
 ###########################
