@@ -182,10 +182,12 @@ class App(QMainWindow):
         self.dataset_combobox = QComboBox()
         self.dataset_combobox.setFixedHeight(30)
         side_layout.addWidget(self.dataset_combobox)
+        self.dataset_combobox.activated.connect(self.update_dataset)
 
         frame_layout = QHBoxLayout()
         self.frame_num = QSpinBox()
         self.frame_num.setFixedHeight(30)
+        self.frame_num.valueChanged.connect(self.update_frame)
         frame_layout.addWidget(QLabel("Frame"))
         frame_layout.addWidget(self.frame_num)
         side_layout.addLayout(frame_layout)
@@ -193,6 +195,7 @@ class App(QMainWindow):
         time_layout = QHBoxLayout()
         self.time_num = QLineEdit()
         self.time_num.setFixedHeight(30)
+        self.time_num.textEdited.connect(self.update_time)
         time_layout.addWidget(QLabel("Time (s)"))
         time_layout.addWidget(self.time_num)
         side_layout.addLayout(time_layout)
@@ -408,7 +411,12 @@ class App(QMainWindow):
         os.mkdir(destination_folder)
 
         new_dataset['folder'] = destination_folder
+        new_dataset['is_image'] = True
         new_dataset['is_scaled'] = False
+        new_dataset['is_vector'] = False
+        new_dataset['is_lagrangian'] = False
+        new_dataset['is_eulerian'] = False
+        new_dataset['is_scalar'] = False
 
         # add dataset to dictionary and export as json
         project_dictionary[new_dataset_name] = new_dataset
@@ -437,7 +445,6 @@ class App(QMainWindow):
         self.statusBar.showMessage(msg,3000)
 
         self.update_mpl()
-
 
     def update_import_progress_bar(self, current_val):
         global import_param
@@ -603,7 +610,6 @@ class App(QMainWindow):
         self.viewport_layout.addWidget(self.canvas)
         self.viewport_layout.addWidget(self.toolbar)
 
-
     def clear_mpl(self):
         self.viewport_layout.removeWidget(self.canvas)
         self.viewport_layout.removeWidget(self.toolbar)
@@ -661,6 +667,55 @@ class App(QMainWindow):
         self.update_mpl()
 
         self.dialog_background.close()
+
+    def update_dataset(self):
+        global display_settings, project_dictionary
+        # get the new dataset index and place it in the display dict
+        new_dataset_index = self.dataset_combobox.currentIndex()
+        display_settings['dataset_index'] = new_dataset_index
+
+        # check the current frame number
+        current_frame = display_settings['frame_number']
+        dataset = 'dataset_'+str(new_dataset_index)
+        dataset_info = project_dictionary[dataset]
+        max_frame = dataset_info['number images']
+        dt = dataset_info['dt']
+
+        if current_frame > max_frame:
+            current_frame = max_frame
+            display_settings['frame_number'] = current_frame
+            self.frame_num.setValue(current_frame)
+            self.time_num.setText(str((current_frame-1) * dt))
+
+        # update the viewport
+        self.update_mpl()
+
+    def update_frame(self):
+        global display_settings, project_dictionary
+        current_frame = display_settings['frame_number']
+        new_frame = self.frame_num.Value()
+
+        dataset_index = display_settings['dataset_index']
+        dataset = 'dataset_'+str(dataset_index)
+        dataset_info = project_dictionary[dataset]
+        max_frame = dataset_info['number images']
+        dt = dataset_info['dt']
+
+        if new_frame >= max_frame:
+            new_frame = max_frame
+
+        self.frame_num.setValue(new_frame)
+        display_settings['frame_number'] = current_frame
+        self.time_num.setText(str((current_frame-1) * dt))
+
+        # update the viewport
+        self.update_mpl()
+
+    def update_time(self):
+        global display_settings, project_dictionary
+
+
+
 
 
 
