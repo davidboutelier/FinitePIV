@@ -164,10 +164,14 @@ class App(QMainWindow):
         filemenu_data.addAction(import_img_action)
 
         filemenu_calibrate = menubar.addMenu('Calibrate')
+        uniform_scale_action = QAction("Add uniform scale", self)
         define_calib_board_action = QAction("Define calibration board",self)
         start_calib_action = QAction("Start calibration",self)
+        filemenu_calibrate.addAction(uniform_scale_action)
         filemenu_calibrate.addAction(define_calib_board_action)
         filemenu_calibrate.addAction(start_calib_action)
+
+        define_calib_board_action.triggered.connect(self.show_dialog_define_calibration_board)
 
         filemenu_preprocess = menubar.addMenu('Preprocess')
         correct_images_action = QAction("Correct images", self)
@@ -731,6 +735,34 @@ class App(QMainWindow):
             self.frame_num.setValue(new_frame)
 
             # should trigger an update so no need to update the viewer
+
+
+    def show_dialog_define_calibration_board(self):
+
+        self.dialog_calib_board = QDialog(self)
+        Title = 'Calibration board'
+        self.dialog_calib_board.setWindowTitle(Title)
+
+        self.dialog_calib_board.nx = QLineEdit() 
+        self.dialog_calib_board.ny = QLineEdit() 
+        self.dialog_calib_board.dx = QLineEdit() 
+        self.dialog_calib_board.dy = QLineEdit()
+        self.dialog_calib_board.dist_u = QComboBox()  
+        self.dialog_calib_board.dist_u.addItem('mm')
+        self.dialog_calib_board.dist_u.addItem('cm')
+        self.dialog_calib_board.dist_u.addItem('m')
+        self.dialog_calib_board.button = QPushButton('OK')
+
+        self.dialog_calib_board.dlg_layout = QFormLayout()
+        self.dialog_calib_board.dlg_layout.addRow('nx: ', self.dialog_calib_board.nx)
+        self.dialog_calib_board.dlg_layout.addRow('ny: ', self.dialog_calib_board.ny)
+        self.dialog_calib_board.dlg_layout.addRow('dx: ', self.dialog_calib_board.dx)
+        self.dialog_calib_board.dlg_layout.addRow('dy: ', self.dialog_calib_board.dy)
+        self.dialog_calib_board.dlg_layout.addRow('distance unit: ', self.dialog_calib_board.dist_u)
+        self.dialog_calib_board.dlg_layout.addRow(self.dialog_calib_board.button)
+        self.dialog_calib_board.setLayout(self.dialog_calib_board.dlg_layout)
+        self.dialog_calib_board.exec()
+
 
 
 
