@@ -711,8 +711,34 @@ class App(QMainWindow):
         # update the viewport
         self.update_mpl()
 
+
     def update_time(self):
         global display_settings, project_dictionary
+
+        new_time = self.time_num.text()
+        test = new_time.replace('.', '', 1).isdigit()
+        if test:
+            new_time = float(new_time)
+            dataset_index = display_settings['dataset_index']
+            dataset = 'dataset_'+str(dataset_index)
+            dataset_info = project_dictionary[dataset]
+            max_frame = dataset_info['number images']
+            dt = dataset_info['dt']
+            new_frame = round(1 + new_time/dt)
+
+            display_settings['frame_number'] = new_frame
+            self.time_num.setText(str((new_frame-1) * dt))
+            self.frame_num.setValue(new_frame)
+
+            # should trigger an update so no need to update the viewer
+
+
+
+
+
+
+
+
 
 
 
