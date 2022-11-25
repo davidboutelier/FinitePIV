@@ -28,13 +28,14 @@ from skimage import io, img_as_uint
 # global variable
 project_dictionary = {} # empty dictionary
 import_param = [] # empty list for import
-display_settings = {'dataset_index':0, 'frame_number':1, 
+display_settings = {'dataset_index':1, 'frame_number':1, 
 'display_background': False, 'display_scalar': False, 'display_vector': False,
 'background_colormap_index': 0, 'flip_background': False, 'background_min': 0, 'background_max': 1, 
 'scalar_colormap_index': 0, 'flip_scalar' : False, 'scalar_obj_index': 0,
 'vector_type': 'inc', 'sum_mode': 'eul', 'vector_color_index': 0, 'vector_thickness': 1, 'vector_sampling': 1, 'vector_scaling_mode_index':0, 'vector_scale': 1}
 starttime = None
 list_cmap_background = ['gray', 'gist_gray', 'bone', 'copper']
+calib_board = {'nx': 10, 'ny': 10, 'dx': 10, 'dy': 10}
 
 class Worker(QObject):
     finished = pyqtSignal()
@@ -81,7 +82,7 @@ class Worker(QObject):
         elif im_format == 'DNG':
             file_list = sorted(glob.glob(os.path.join(source_path, '*.dng')))
             n_img = len(file_list)
-            print('not implemented yet')
+            
             for i in range(n_img):
                 file_in = file_list[i]
                 file_out = os.path.join(dest_path, 'IMG_'+str(i+1).zfill(4)+'.tif')
@@ -92,10 +93,7 @@ class Worker(QObject):
                 io.imsave(file_out, new_img)
                 self.progress.emit(i + 1)
             self.finished.emit()
-
-        else:
-            print('error image format unknown')
-        
+            endtime = datetime.now()
         
 
 class MplCanvas(FigureCanvas):
@@ -124,7 +122,6 @@ class App(QMainWindow):
         new_project_action.setStatusTip('New')
         new_project_action.triggered.connect(self.create_project)
         
-
         open_project_action = QAction('Open', self)
         open_project_action.setShortcut('Ctrl+O')
         open_project_action.setStatusTip('Open')
@@ -163,21 +160,25 @@ class App(QMainWindow):
         filemenu_data = menubar.addMenu('Data')
         filemenu_data.addAction(import_img_action)
 
-        filemenu_calibrate = menubar.addMenu('Calibrate')
-        uniform_scale_action = QAction("Add uniform scale", self)
-        define_calib_board_action = QAction("Define calibration board",self)
-        start_calib_action = QAction("Start calibration",self)
-        filemenu_calibrate.addAction(uniform_scale_action)
-        filemenu_calibrate.addAction(define_calib_board_action)
-        filemenu_calibrate.addAction(start_calib_action)
+        self.filemenu_calibrate = menubar.addMenu('Calibrate')
+        self.uniform_scale_action = QAction("Add uniform scale", self)
+        self.define_calib_board_action = QAction("Define calibration board",self)
+        self.start_calib_action = QAction("Start calibration",self)
+        self.filemenu_calibrate.addAction(self.uniform_scale_action)
+        self.filemenu_calibrate.addAction(self.define_calib_board_action)
+        self.filemenu_calibrate.addAction(self.start_calib_action)
 
-        define_calib_board_action.triggered.connect(self.show_dialog_define_calibration_board)
+        self.define_calib_board_action.triggered.connect(self.show_dialog_define_calibration_board)
 
-        filemenu_preprocess = menubar.addMenu('Preprocess')
-        correct_images_action = QAction("Correct images", self)
-        adjust_contrast_action = QAction("Adjust contrast", self)
-        filemenu_preprocess.addAction(correct_images_action)
-        filemenu_preprocess.addAction(adjust_contrast_action)
+        self.filemenu_preprocess = menubar.addMenu('Preprocess')
+        self.correct_images_action = QAction("Correct images", self)
+        self.adjust_contrast_action = QAction("Adjust contrast", self)
+        self.filemenu_preprocess.addAction(self.correct_images_action)
+        self.filemenu_preprocess.addAction(self.adjust_contrast_action)
+
+        self.filemenu_correlate = menubar.addMenu('Correlation')
+        self.correlation_setting = QAction("Settings")
+        self.filemenu_correlate.addAction(self.correlation_setting)
 
         # Create a side layout for the controls
         side_layout = QVBoxLayout()  
@@ -191,6 +192,7 @@ class App(QMainWindow):
         frame_layout = QHBoxLayout()
         self.frame_num = QSpinBox()
         self.frame_num.setFixedHeight(30)
+        self.frame_num.setMinimum(1)
         self.frame_num.valueChanged.connect(self.update_frame)
         frame_layout.addWidget(QLabel("Frame"))
         frame_layout.addWidget(self.frame_num)
@@ -390,14 +392,6 @@ class App(QMainWindow):
         
         display_settings['dataset_index'] = i
         
-        # update the main window controls
-        self.dataset_combobox.addItem(import_dataset)
-        self.frame_num.setValue(1)
-        self.time_num.setText(str(0))
-        self.checkbox_bitmap.setChecked(True)
-        display_settings['display_background'] = True
-        self.dlg.close()
-
         # get path to images
         image_path=QFileDialog.getExistingDirectory(self,"Choose Directory")
         
@@ -424,10 +418,18 @@ class App(QMainWindow):
 
         # add dataset to dictionary and export as json
         project_dictionary[new_dataset_name] = new_dataset
+
         with open("current_project.json", "w") as fp:
             json.dump(project_dictionary , fp)
 
-        
+        # update the main window controls
+        self.dataset_combobox.addItem(import_dataset)
+        self.frame_num.setValue(1)
+        self.time_num.setText(str(0))
+        self.checkbox_bitmap.setChecked(True)
+        display_settings['display_background'] = True
+        self.dlg.close()
+
         # start the import in a new worker
         # place parameters in global list for the worker
         import_param = [import_img_format, image_path, destination_folder, num_images]
@@ -696,8 +698,10 @@ class App(QMainWindow):
 
     def update_frame(self):
         global display_settings, project_dictionary
+
+        print('frame num changed')
         current_frame = display_settings['frame_number']
-        new_frame = self.frame_num.Value()
+        new_frame = self.frame_num.value()
 
         dataset_index = display_settings['dataset_index']
         dataset = 'dataset_'+str(dataset_index)
@@ -709,11 +713,12 @@ class App(QMainWindow):
             new_frame = max_frame
 
         self.frame_num.setValue(new_frame)
-        display_settings['frame_number'] = current_frame
-        self.time_num.setText(str((current_frame-1) * dt))
+        display_settings['frame_number'] = new_frame
+        self.time_num.setText(str((new_frame-1) * dt))
+        print('setting time to '+str((new_frame-1) * dt))
 
         # update the viewport
-        self.update_mpl()
+        #no need to update the viewer. updating the framenum will cascade
 
 
     def update_time(self):
